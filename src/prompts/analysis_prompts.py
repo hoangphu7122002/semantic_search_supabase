@@ -21,7 +21,7 @@ WEB_ANALYSIS_PROMPT = """Please analyze this website HTML content and provide a 
         }
     },
     "business": {
-        "industry": ["Choose from: Technology, E-commerce, Education, Entertainment, Business, Creative, Healthcare"],
+        "industry": ["Choose from: Technology, E-commerce, Education, Entertainment, Business, Creative, Healthcare,...."],
         "complexity": "Low/Medium/High",
         "features": ["Key functionality offered"]
     }
