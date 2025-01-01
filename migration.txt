@@ -1,0 +1,62 @@
+-- Drop existing table if exists
+drop table if exists screen_analysis;
+
+-- Enable vector extension
+create extension if not exists vector;
+
+-- Create table with correct structure
+create table screen_analysis (
+    id bigint primary key generated always as identity,
+    screen_id bigint references screens(id),
+    site_url text,
+    webp_url text,
+    web_analysis jsonb,
+    image_analysis jsonb,
+    embedding vector(1536),
+    created_at timestamp with time zone default timezone('utc'::text, now()),
+    updated_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- Create indexes
+create index screen_analysis_screen_id_idx on screen_analysis(screen_id);
+create index screen_analysis_site_url_idx on screen_analysis(site_url);
+create index screen_analysis_embedding_idx on screen_analysis using ivfflat (embedding vector_cosine_ops);
+
+
+-- Enable vector extension if not exists
+create extension if not exists vector;
+
+-- Create screen_analysis_fusion table
+create table screen_analysis_fusion (
+    id bigint primary key generated always as identity,
+    screen_id bigint references screens(id),
+    site_url text not null,
+    web_analysis jsonb,                    -- Kết quả phân tích HTML
+    image_analyses jsonb[],                -- Array các kết quả phân tích ảnh
+    fused_analysis jsonb,                  -- Kết quả fusion từ web và image analyses
+    embedding vector(1536),                -- Vector embedding (để dùng sau)
+    created_at timestamp with time zone default timezone('utc'::text, now()),
+    updated_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- Create indexes
+create index screen_analysis_fusion_screen_id_idx on screen_analysis_fusion(screen_id);
+create index screen_analysis_fusion_site_url_idx on screen_analysis_fusion(site_url);
+create index screen_analysis_fusion_embedding_idx on screen_analysis_fusion using ivfflat (embedding vector_cosine_ops);
+
+-- Add RLS policies if needed
+alter table screen_analysis_fusion enable row level security;
+
+-- Optional: Add a function to update updated_at timestamp
+create or replace function update_updated_at_column()
+returns trigger as $$
+begin
+    new.updated_at = timezone('utc'::text, now());
+    return new;
+end;
+$$ language plpgsql;
+
+create trigger update_screen_analysis_fusion_updated_at
+    before update on screen_analysis_fusion
+    for each row
+    execute function update_updated_at_column();
