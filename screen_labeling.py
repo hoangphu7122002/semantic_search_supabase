@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from supabase import create_client
 from typing import Optional
+import argparse
 
 from src.services.web_analyzer import WebAnalyzer
 from src.services.gemini_analyzer import GeminiAnalyzer
@@ -261,6 +262,20 @@ def main1(save_to_db: bool = True, max_sites: Optional[int] = 5):
         logger.error(f"Error in main1 execution: {str(e)}")
         sys.exit(1)
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Screen analysis and labeling tool')
+    parser.add_argument('mode', choices=['main', 'main1'], 
+                       help='Analysis mode: main (regular) or main1 (with fusion)')
+    parser.add_argument('--save-to-db', action='store_true', default=True,
+                       help='Save results to database (default: True)')
+    parser.add_argument('--max-sites', type=int, default=5,
+                       help='Maximum number of sites to analyze (default: 5)')
+    return parser.parse_args()
+
 if __name__ == "__main__":
-    #main(save_to_db=True, max_sites=5)  # For image analysis and fusion 
-    main1(save_to_db=True, max_sites=5)  # For image analysis and fusion 
+    args = parse_args()
+    
+    if args.mode == 'main':
+        main(save_to_db=args.save_to_db, max_sites=args.max_sites)
+    else:  # main1
+        main1(save_to_db=args.save_to_db, max_sites=args.max_sites) 

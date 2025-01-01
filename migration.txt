@@ -60,3 +60,62 @@ create trigger update_screen_analysis_fusion_updated_at
     before update on screen_analysis_fusion
     for each row
     execute function update_updated_at_column();
+
+-- Drop existing match_embeddings functions
+drop function if exists match_embeddings(vector, float, int, text);
+drop function if exists match_embeddings(vector, int, text);
+
+-- Create function for vector similarity search
+create or replace function match_embeddings(
+  query_embedding vector(1536),
+  top_k int,
+  table_name text
+)
+returns table (
+  id bigint,
+  screen_id bigint,
+  site_url text,
+  webp_url text,
+  similarity float
+)
+language plpgsql
+as $$
+#variable_conflict use_column
+declare
+  query text;
+begin
+  -- Construct dynamic query based on table name
+  if table_name = 'screen_analysis' then
+    query := format('
+      select 
+        id,
+        screen_id,
+        site_url,
+        webp_url,
+        1 - (embedding <=> %L::vector) as similarity
+      from screen_analysis
+      where embedding is not null
+      order by similarity desc
+      limit %s
+    ', query_embedding, top_k);
+  else
+    query := format('
+      select 
+        id,
+        screen_id,
+        site_url,
+        null as webp_url,
+        1 - (embedding <=> %L::vector) as similarity
+      from screen_analysis_fusion
+      where embedding is not null
+      order by similarity desc
+      limit %s
+    ', query_embedding, top_k);
+  end if;
+  
+  return query execute query;
+end;
+$$;
+
+-- Grant necessary permissions
+grant execute on function match_embeddings to postgres, anon, authenticated, service_role;
