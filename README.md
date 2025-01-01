@@ -25,13 +25,6 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Deactivating Virtual Environment
-
-When you're done working with the scripts, you can deactivate the virtual environment:
-```bash
-deactivate
-```
-
 ## Running screen_labeling.py
 
 This script allows you to label screens with their corresponding categories and components.
@@ -61,68 +54,58 @@ Parameters:
 - `--save-to-db`: Whether to save results to database (default: True)
 - `--max-sites`: Maximum number of sites to analyze (default: 5)
 
-The script will:
-1. Load images from the database
-2. For regular analysis (main):
-   - Process web content and images separately
-   - Generate basic component and category labels
-3. For fusion analysis (main1):
-   - Process web content and images
-   - Combine analyses using fusion analyzer
-   - Generate enhanced component labels
-4. Save results to appropriate database table
-   - Regular analysis: 'screen_analysis' table
-   - Fusion analysis: 'screen_analysis_fusion' table
+## Running update_embeddings.py
+
+This script updates or generates embedding vectors for analyses in the database.
+
+Usage:
+```bash
+python update_embeddings.py --batch-size <number_or_all> --mode <mode>
+```
+
+Example:
+```bash
+# Update regular embeddings
+python update_embeddings.py --batch-size 10 --mode regular
+
+# Update fusion embeddings
+python update_embeddings.py --batch-size all --mode fusion
+```
+
+Parameters:
+- `--batch-size`: Number of records to process in each batch or 'all'
+- `--mode`: Processing mode (choices: 'regular', 'fusion', default: 'regular')
 
 ## Running search_similar.py
 
-This script helps find similar screens based on embedding vectors.
+This script searches for similar screens using embedding vectors.
 
 Usage:
 ```bash
-python search_similar.py --query <query_image> --top_k <num_results> [--threshold <similarity_threshold>]
+python search_similar.py "<query_text>" --mode <mode> --top-k <number>
 ```
 
 Example:
 ```bash
-python search_similar.py --query ./screens/homepage.jpg --top_k 5 --threshold 0.8
+# Search in regular analyses
+python search_similar.py "landing page with hero section" --mode regular --top-k 5
+
+# Search in fusion analyses
+python search_similar.py "checkout page with payment form" --mode fusion --top-k 3
 ```
 
 Parameters:
-- `query`: Path to the query image
-- `top_k`: Number of similar results to return
-- `threshold`: (Optional) Minimum similarity score threshold
-
-## Running update_embeddings.py
-
-This script updates or generates embedding vectors for all screens in the database.
-
-Usage:
-```bash
-python update_embeddings.py --batch_size <batch_size> [--force]
-```
-
-Example:
-```bash
-python update_embeddings.py --batch_size 32 --force
-```
-
-Parameters:
-- `batch_size`: Number of images to process in each batch
-- `force`: (Optional) Force update existing embeddings
-
-The script will:
-1. Load screen images from the database
-2. Generate embedding vectors using the embedding processor
-3. Update the database with new vectors
-4. Show progress and completion summary
+- `query`: Search query text (required)
+- `--mode`: Search mode (choices: 'regular', 'fusion', default: 'regular')
+- `--top-k`: Number of top results to return (default: 5)
 
 ## Environment Variables
 
 Make sure to configure the following variables in your `.env` file:
+- `PUBLIC_SUPABASE_URL`: Your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
 - `OPENAI_API_KEY`: Your OpenAI API key
-- `DATABASE_URL`: Database connection string
-- `MODEL_NAME`: Name of the embedding model to use
+- `GEMINI_API_KEY`: Your Google Gemini API key
 
 ## Note
 - Always activate the virtual environment before running any scripts
