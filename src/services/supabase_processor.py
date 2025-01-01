@@ -218,30 +218,52 @@ class SupabaseImageProcessor:
                 logger.error(f"Supabase connection error: {str(e)}")
                 return []
 
-            # Get all site_urls from screens table
-            query = self.supabase.table('screens')\
-                .select('id', 'site_url')\
-                .order('id')
-            
-            response = query.execute()
-            
-            # Filter out already analyzed sites
-            sites_to_process = []
-            for record in response.data:
-                site_url = record['site_url']
-                screen_id = record['id']
+            # Get all unanalyzed sites
+            if self.enable_fusion:
+                # For fusion mode: Get sites not in screen_analysis_fusion
+                analyzed_sites = self.supabase.table('screen_analysis_fusion')\
+                    .select('site_url')\
+                    .execute()
+                analyzed_urls = [record['site_url'] for record in analyzed_sites.data]
                 
-                # Check if site has been analyzed based on mode
-                is_analyzed = (
-                    self._is_fusion_analyzed(site_url) if self.enable_fusion 
-                    else self._is_analyzed(screen_id, site_url)
-                )
+                # Get unique site_urls from screens
+                query = self.supabase.table('screens')\
+                    .select('id', 'site_url')\
+                    .order('id')
                 
-                if not is_analyzed:
-                    sites_to_process.append((site_url, screen_id))
-                    # Break if we have enough unanalyzed sites
-                    if max_sites and len(sites_to_process) >= max_sites:
-                        break
+                response = query.execute()
+                
+                # Create dict with site_url as key and first screen_id as value
+                unique_sites = {}
+                for record in response.data:
+                    site_url = record['site_url']
+                    if site_url not in unique_sites and site_url not in analyzed_urls:
+                        unique_sites[site_url] = record['id']
+            else:
+                # For regular mode: Get sites not in screen_analysis
+                analyzed_sites = self.supabase.table('screen_analysis')\
+                    .select('site_url')\
+                    .execute()
+                analyzed_urls = [record['site_url'] for record in analyzed_sites.data]
+                
+                # Get unique site_urls from screens
+                query = self.supabase.table('screens')\
+                    .select('id', 'site_url')\
+                    .order('id')
+                
+                response = query.execute()
+                
+                # Create dict with site_url as key and first screen_id as value
+                unique_sites = {}
+                for record in response.data:
+                    site_url = record['site_url']
+                    if site_url not in unique_sites and site_url not in analyzed_urls:
+                        unique_sites[site_url] = record['id']
+
+            # Convert to list and apply limit
+            sites_to_process = list(unique_sites.items())
+            if max_sites:
+                sites_to_process = sites_to_process[:max_sites]
             
             if not sites_to_process:
                 logger.info("No new sites to analyze")
