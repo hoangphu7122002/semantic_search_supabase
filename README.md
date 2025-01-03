@@ -36,6 +36,9 @@ python screen_labeling.py main --save-to-db --max-sites <number>
 
 # For labeling with fusion analysis:
 python screen_labeling.py main1 --save-to-db --max-sites <number>
+
+# For HTML-only analysis:
+python screen_labeling.py main2 --save-to-db --max-sites <number>
 ```
 
 Example:
@@ -45,14 +48,20 @@ python screen_labeling.py main --save-to-db --max-sites 5
 
 # Analysis with fusion components
 python screen_labeling.py main1 --save-to-db --max-sites 5
+
+# HTML-only analysis (processes more sites)
+python screen_labeling.py main2 --save-to-db --max-sites 100
 ```
 
 Parameters:
 - Command: Choose analysis mode
   - `main`: Regular screen analysis
   - `main1`: Analysis with fusion components
+  - `main2`: HTML-only analysis
 - `--save-to-db`: Whether to save results to database (default: True)
-- `--max-sites`: Maximum number of sites to analyze (default: 5)
+- `--max-sites`: Maximum number of sites to analyze
+  - Use 0 or negative number for no limit
+  - Default: 5 for main/main1, 100 for main2
 
 ## Running update_embeddings.py
 
@@ -70,11 +79,14 @@ python update_embeddings.py --batch-size 10 --mode regular
 
 # Update fusion embeddings
 python update_embeddings.py --batch-size all --mode fusion
+
+# Update HTML analysis embeddings
+python update_embeddings.py --batch-size 10 --mode html
 ```
 
 Parameters:
 - `--batch-size`: Number of records to process in each batch or 'all'
-- `--mode`: Processing mode (choices: 'regular', 'fusion', default: 'regular')
+- `--mode`: Processing mode (choices: 'regular', 'fusion', 'html', default: 'regular')
 
 ## Running search_similar.py
 
@@ -92,11 +104,14 @@ python search_similar.py "landing page with hero section" --mode regular --top-k
 
 # Search in fusion analyses
 python search_similar.py "checkout page with payment form" --mode fusion --top-k 3
+
+# Search in HTML analyses
+python search_similar.py "booking website" --mode html --top-k 10
 ```
 
 Parameters:
 - `query`: Search query text (required)
-- `--mode`: Search mode (choices: 'regular', 'fusion', default: 'regular')
+- `--mode`: Search mode (choices: 'regular', 'fusion', 'html', default: 'regular')
 - `--top-k`: Number of top results to return (default: 5)
 
 ## Environment Variables
@@ -111,3 +126,7 @@ Make sure to configure the following variables in your `.env` file:
 - Always activate the virtual environment before running any scripts
 - Ensure all required environment variables are set in `.env`
 - The virtual environment directory (`venv/`) is gitignored
+- Different analysis modes store results in separate tables:
+  - Regular: screen_analysis
+  - Fusion: screen_analysis_fusion
+  - HTML: screen_html_analysis
