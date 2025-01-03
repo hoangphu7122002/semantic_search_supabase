@@ -232,17 +232,25 @@ class SupabaseImageProcessor:
                 
                 # Get unique site_urls from screens
                 query = self.supabase.table('screens')\
-                    .select('id', 'site_url')\
+                    .select('id', 'site_url', 'img_url')\
                     .order('id')
                 
                 response = query.execute()
                 
-                # Create dict with site_url as key and first screen_id as value
+                # Create dict with site_url as key and list of (screen_id, img_url) as value
                 unique_sites = {}
                 for record in response.data:
                     site_url = record['site_url']
                     if site_url not in unique_sites and site_url not in analyzed_urls:
-                        unique_sites[site_url] = record['id']
+                        if max_sites is None or len(unique_sites) < max_sites:
+                            unique_sites[site_url] = []
+                    if site_url in unique_sites:
+                        full_img_url = f"{self.storage_base_url}/{record['img_url']}"
+                        unique_sites[site_url].append((record['id'], full_img_url))
+
+                # Convert to list
+                sites_to_process = list(unique_sites.items())
+
             else:
                 # Cho regular mode: Lấy các img_url chưa được phân tích
                 analyzed_records = self.supabase.table('screen_analysis')\

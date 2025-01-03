@@ -122,60 +122,60 @@ IMAGE_ANALYSIS_PROMPT = """Please analyze this website screenshot and provide a 
 
 Note: Focus on extracting and understanding visible text content, visual elements, design details, and UX aspects."""
 
-# FUSION_ANALYSIS_PROMPT = """Please analyze these multiple image analysis results of the same website and provide a single comprehensive analysis.
-
-# Input analyses:
-# {0}
-
-# Provide a JSON output with the following structure:
-# {{
-#     "content": {{
-#         "primary_topic": "The main topic/purpose consistent across images",
-#         "key_messages": ["Most important messages found consistently"],
-#         "text_summary": "Summary of key text content across all images"
-#     }},
-#     "design": {{
-#         "dominant_style": ["Most consistent design patterns"],
-#         "color_theme": {{
-#             "primary_colors": ["Consistently used main colors"],
-#             "overall_scheme": "Predominant color scheme"
-#         }},
-#         "typography_pattern": ["Consistent typography choices"]
-#     }},
-#     "user_experience": {{
-#         "overall_clarity": "Assessment of consistent UX patterns",
-#         "common_elements": ["UI elements found across multiple images"],
-#         "brand_consistency": "How consistent the branding is across images"
-#     }},
-#     "key_patterns": {{
-#         "strengths": ["Consistent positive aspects"],
-#         "unique_features": ["Distinctive elements found across images"]
-#     }}
-# }}""" 
-
 FUSION_ANALYSIS_PROMPT = """Please analyze these multiple image analysis results of the same website and provide a single comprehensive analysis.
 
 Input analyses:
 {0}
 
 Provide a JSON output with the following structure:
+{{
+    "content": {{
+        "primary_topic": "The main topic/purpose consistent across images",
+        "key_messages": ["Most important messages found consistently"],
+        "text_summary": "Summary of key text content across all images"
+    }},
+    "design": {{
+        "dominant_style": ["Most consistent design patterns"],
+        "color_theme": {{
+            "primary_colors": ["Consistently used main colors"],
+            "overall_scheme": "Predominant color scheme"
+        }},
+        "typography_pattern": ["Consistent typography choices"]
+    }},
+    "user_experience": {{
+        "overall_clarity": "Assessment of consistent UX patterns",
+        "common_elements": ["UI elements found across multiple images"],
+        "brand_consistency": "How consistent the branding is across images"
+    }},
+    "key_patterns": {{
+        "strengths": ["Consistent positive aspects"],
+        "unique_features": ["Distinctive elements found across images"]
+    }}
+}}""" 
 
-{
-    "content_primary_topic": "The main topic/purpose consistent across images",
-    "content_key_messages": ["Most important messages found consistently"],
-    "content_text_summary": "Summary of key text content across all images",
+# FUSION_ANALYSIS_PROMPT = """Please analyze these multiple image analysis results of the same website and provide a single comprehensive analysis.
 
-    "design_dominant_style": ["Most consistent design patterns"],
-    "design_color_primary_colors": ["Consistently used main colors"],
-    "design_color_overall_scheme": "Predominant color scheme",
-    "design_typography_pattern": ["Consistent typography choices"],
+# Input analyses:
+# {0}
 
-    "user_experience_overall_clarity": "Assessment of consistent UX patterns",
-    "user_experience_common_elements": ["UI elements found across multiple images"],
-    "user_experience_brand_consistency": "How consistent the branding is across images",
+# Provide a JSON output with the following structure:
 
-    "key_patterns_strengths": ["Consistent positive aspects"],
-    "key_patterns_unique_features": ["Distinctive elements found across images"]
-}
+# {
+#     "content_primary_topic": "The main topic/purpose consistent across images",
+#     "content_key_messages": ["Most important messages found consistently"],
+#     "content_text_summary": "Summary of key text content across all images",
 
-Note: Focus on identifying recurring themes and patterns across all input analyses, ensuring the output reflects a unified understanding of the website's content, design, user experience, and key strengths."""
+#     "design_dominant_style": ["Most consistent design patterns"],
+#     "design_color_primary_colors": ["Consistently used main colors"],
+#     "design_color_overall_scheme": "Predominant color scheme",
+#     "design_typography_pattern": ["Consistent typography choices"],
+
+#     "user_experience_overall_clarity": "Assessment of consistent UX patterns",
+#     "user_experience_common_elements": ["UI elements found across multiple images"],
+#     "user_experience_brand_consistency": "How consistent the branding is across images",
+
+#     "key_patterns_strengths": ["Consistent positive aspects"],
+#     "key_patterns_unique_features": ["Distinctive elements found across images"]
+# }
+
+# Note: Focus on identifying recurring themes and patterns across all input analyses, ensuring the output reflects a unified understanding of the website's content, design, user experience, and key strengths."""
