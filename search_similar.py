@@ -40,7 +40,7 @@ class SimilaritySearcher:
         
         Args:
             query: Search query text
-            mode: Search mode ('regular' or 'fusion')
+            mode: Search mode ('regular', 'fusion', or 'html')
             top_k: Number of top results to return
             
         Returns:
@@ -50,18 +50,26 @@ class SimilaritySearcher:
             # Create embedding for query
             query_embedding = self._create_query_embedding(query)
             
-            # Select table based on mode
-            table = 'screen_analysis' if mode == 'regular' else 'screen_analysis_fusion'
-            
-            # Perform similarity search using vector comparison
-            rpc_response = self.supabase.rpc(
-                'match_embeddings',
-                {
-                    'query_embedding': query_embedding,
-                    'top_k': top_k,
-                    'table_name': table
-                }
-            ).execute()
+            if mode == 'html':
+                # Use separate function for HTML search
+                rpc_response = self.supabase.rpc(
+                    'match_html_embeddings',
+                    {
+                        'query_embedding': query_embedding,
+                        'top_k': top_k
+                    }
+                ).execute()
+            else:
+                # Use existing function for regular and fusion search
+                table = 'screen_analysis' if mode == 'regular' else 'screen_analysis_fusion'
+                rpc_response = self.supabase.rpc(
+                    'match_embeddings',
+                    {
+                        'query_embedding': query_embedding,
+                        'top_k': top_k,
+                        'table_name': table
+                    }
+                ).execute()
             
             if not rpc_response.data:
                 logger.info("No similar records found")
@@ -90,7 +98,7 @@ def main(query: str, mode: str = 'regular', top_k: int = 5):
     
     Args:
         query: Search query text
-        mode: Search mode ('regular' or 'fusion')
+        mode: Search mode ('regular', 'fusion', or 'html')
         top_k: Number of top results to return
     """
     try:
@@ -123,7 +131,7 @@ def main(query: str, mode: str = 'regular', top_k: int = 5):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Search for similar analyses')
     parser.add_argument('query', type=str, help='Search query text')
-    parser.add_argument('--mode', choices=['regular', 'fusion'], 
+    parser.add_argument('--mode', choices=['regular', 'fusion', 'html'], 
                       default='regular', help='Search mode')
     parser.add_argument('--top-k', type=int, default=5,
                       help='Number of top results to return')

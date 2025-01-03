@@ -98,7 +98,7 @@ begin
       order by similarity desc
       limit %s
     ', query_embedding, top_k);
-  else
+  elsif table_name = 'screen_analysis_fusion' then
     query := format('
       select 
         id,
@@ -111,6 +111,19 @@ begin
       order by similarity desc
       limit %s
     ', query_embedding, top_k);
+  else  -- screen_html_analysis
+    query := format('
+      select 
+        id,
+        screen_id,
+        site_url,
+        null as webp_url,
+        1 - (embedding <=> %L::vector) as similarity
+      from screen_html_analysis
+      where embedding is not null
+      order by similarity desc
+      limit %s
+    ', query_embedding, top_k);
   end if;
   
   return query execute query;
@@ -119,3 +132,49 @@ $$;
 
 -- Grant necessary permissions
 grant execute on function match_embeddings to postgres, anon, authenticated, service_role;
+
+-- Tạo bảng mới cho phân tích HTML
+create table screen_html_analysis (
+    id bigint primary key generated always as identity,
+    screen_id bigint references screens(id),
+    site_url text,
+    web_analysis jsonb,
+    embedding vector(1536),
+    created_at timestamp with time zone default timezone('utc'::text, now()),
+    updated_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- Tạo indexes
+create index screen_html_analysis_screen_id_idx on screen_html_analysis(screen_id);
+create index screen_html_analysis_site_url_idx on screen_html_analysis(site_url);
+create index screen_html_analysis_embedding_idx on screen_html_analysis using ivfflat (embedding vector_cosine_ops);
+
+-- Create function for HTML similarity search
+create or replace function match_html_embeddings(
+  query_embedding vector(1536),
+  top_k int
+)
+returns table (
+  id bigint,
+  screen_id bigint,
+  site_url text,
+  similarity float
+)
+language plpgsql
+as $$
+begin
+  return query
+  select 
+    ha.id,
+    ha.screen_id,
+    ha.site_url,
+    1 - (ha.embedding <=> query_embedding) as similarity
+  from screen_html_analysis ha
+  where ha.embedding is not null
+  order by similarity desc
+  limit top_k;
+end;
+$$;
+
+-- Grant necessary permissions
+grant execute on function match_html_embeddings to postgres, anon, authenticated, service_role;

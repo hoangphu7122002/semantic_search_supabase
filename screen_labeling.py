@@ -7,6 +7,7 @@ import google.generativeai as genai
 from supabase import create_client
 from typing import Optional
 import argparse
+import traceback
 
 from src.services.web_analyzer import WebAnalyzer
 from src.services.gemini_analyzer import GeminiAnalyzer
@@ -262,10 +263,47 @@ def main1(save_to_db: bool = True, max_sites: Optional[int] = 5):
         logger.error(f"Error in main1 execution: {str(e)}")
         sys.exit(1)
 
+def main2(save_to_db: bool = True, max_sites: Optional[int] = 100):
+    """Main execution function for HTML analysis only
+    
+    Args:
+        save_to_db: Whether to save analysis results to database
+        max_sites: Maximum number of unique sites to analyze
+    """
+    try:
+        # Initialize clients
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        genai.configure(api_key=GEMINI_API_KEY)
+        
+        # Initialize analyzers
+        web_analyzer = WebAnalyzer(supabase, clean_html=False)
+        image_analyzer = GeminiAnalyzer()  # Needed for processor initialization
+        
+        # Initialize processor
+        processor = SupabaseImageProcessor(
+            supabase, 
+            web_analyzer, 
+            image_analyzer
+        )
+        
+        # Process sites
+        results = processor.process_html_only(max_sites=max_sites)
+        
+        # Print results
+        logger.info(f"\nAnalysis Results ({len(results)} sites):")
+        for result in results:
+            logger.info(f"\nSite URL: {result['site_url']}")
+            logger.info(f"Screen ID: {result['screen_id']}")
+
+    except Exception as e:
+        logger.error(f"Error in main2 execution: {str(e)}")
+        logger.error(f"Full error: {traceback.format_exc()}")
+        sys.exit(1)
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Screen analysis and labeling tool')
-    parser.add_argument('mode', choices=['main', 'main1'], 
-                       help='Analysis mode: main (regular) or main1 (with fusion)')
+    parser.add_argument('mode', choices=['main', 'main1', 'main2'], 
+                       help='Analysis mode: main (regular), main1 (with fusion), or main2 (HTML only)')
     parser.add_argument('--save-to-db', action='store_true', default=True,
                        help='Save results to database (default: True)')
     parser.add_argument('--max-sites', type=int, default=5,
@@ -277,5 +315,7 @@ if __name__ == "__main__":
     
     if args.mode == 'main':
         main(save_to_db=args.save_to_db, max_sites=args.max_sites)
-    else:  # main1
-        main1(save_to_db=args.save_to_db, max_sites=args.max_sites) 
+    elif args.mode == 'main1':
+        main1(save_to_db=args.save_to_db, max_sites=args.max_sites)
+    else:  # main2
+        main2(save_to_db=args.save_to_db, max_sites=args.max_sites) 

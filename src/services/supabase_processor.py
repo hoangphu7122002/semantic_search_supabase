@@ -24,15 +24,19 @@ class SupabaseImageProcessor:
         self.enable_fusion = enable_fusion
         self.fusion_analyzer = FusionAnalyzer(image_analyzer) if enable_fusion else None
         self.web_analysis_cache = {}
+        self.storage_base_url = "http://127.0.0.1:54321/storage/v1/object/public/screens"
 
     def _save_analysis(self, result: ImageAnalysis):
         """Saves image analysis results to database"""
         try:
+            # Đảm bảo webp_url có format đầy đủ với http
+            full_webp_url = f"{self.storage_base_url}/{result.url}" if not result.url.startswith('http') else result.url
+            
             self.supabase.table('screen_analysis').insert({
-                'screen_id': None,  # You might want to link this with screens table
+                'screen_id': result.screen_id,
                 'analysis_text': json.dumps(result.analysis),
-                'embedding': None,  # For future use
-                'webp_url': result.url
+                'embedding': None,
+                'webp_url': full_webp_url
             }).execute()
             logger.info(f"Saved analysis for image: {result.filename}")
         except Exception as e:
@@ -240,27 +244,37 @@ class SupabaseImageProcessor:
                     if site_url not in unique_sites and site_url not in analyzed_urls:
                         unique_sites[site_url] = record['id']
             else:
-                # For regular mode: Get sites not in screen_analysis
-                analyzed_sites = self.supabase.table('screen_analysis')\
-                    .select('site_url')\
+                # Cho regular mode: Lấy các img_url chưa được phân tích
+                analyzed_records = self.supabase.table('screen_analysis')\
+                    .select('webp_url')\
                     .execute()
-                analyzed_urls = [record['site_url'] for record in analyzed_sites.data]
+                analyzed_webp_urls = [record['webp_url'] for record in analyzed_records.data]
                 
-                # Get unique site_urls from screens
+                # Lấy tất cả screens với site_url và img_url
                 query = self.supabase.table('screens')\
-                    .select('id', 'site_url')\
+                    .select('id', 'site_url', 'img_url')\
                     .order('id')
                 
                 response = query.execute()
                 
-                # Create dict with site_url as key and first screen_id as value
+                # Tạo dict với key là site_url và value là list của (screen_id, img_url)
                 unique_sites = {}
                 for record in response.data:
                     site_url = record['site_url']
-                    if site_url not in unique_sites and site_url not in analyzed_urls:
-                        unique_sites[site_url] = record['id']
+                    img_url = record['img_url']
+                    screen_id = record['id']
+                    
+                    # Tạo full storage URL
+                    full_img_url = f"{self.storage_base_url}/{img_url}"
+                    
+                    if full_img_url not in analyzed_webp_urls:
+                        if site_url not in unique_sites:
+                            if max_sites is None or len(unique_sites) < max_sites:
+                                unique_sites[site_url] = []
+                        if site_url in unique_sites:
+                            unique_sites[site_url].append((screen_id, full_img_url))
 
-            # Convert to list and apply limit
+            # Convert to list và áp dụng giới hạn
             sites_to_process = list(unique_sites.items())
             if max_sites:
                 sites_to_process = sites_to_process[:max_sites]
@@ -275,20 +289,72 @@ class SupabaseImageProcessor:
             processed_count = 0
             skipped_count = 0
 
-            for site_url, screen_id in sites_to_process:
+            for site_url, screen_records in sites_to_process:
                 logger.info(f"Processing site: {site_url}")
-                analysis = self.analyze_site(screen_id, site_url)
                 
-                if analysis:
-                    logger.info(f"Analysis completed for {site_url}, attempting to save...")
-                    self.save_analysis(analysis)
-                    results.append(analysis)
-                    processed_count += 1
+                # Phân tích web một lần cho mỗi site_url
+                web_analysis = None
+                if site_url in self.web_analysis_cache:
+                    logger.info(f"Using cached web analysis for {site_url}")
+                    web_analysis = self.web_analysis_cache[site_url]
                 else:
+                    web_analysis = self.web_analyzer.analyze_website(site_url)
+                    if web_analysis:
+                        self.web_analysis_cache[site_url] = web_analysis
+                
+                if not web_analysis:
+                    logger.warning(f"No web analysis results for {site_url}")
                     skipped_count += 1
-                    logger.warning(f"Failed to analyze {site_url}")
+                    continue
 
-            logger.info(f"Processing completed: {processed_count} sites analyzed, {skipped_count} sites skipped")
+                # Process all images for this site
+                for screen_id, img_url in screen_records:  # img_url đã là full URL
+                    try:
+                        with tempfile.NamedTemporaryFile(suffix='.webp', delete=False) as temp_file:
+                            if self._download_image(img_url, temp_file.name):
+                                analysis = self.image_analyzer.analyze_image(temp_file.name)
+                                if analysis:
+                                    # Lấy relative path từ full URL để lưu vào database
+                                    relative_img_url = img_url.replace(self.storage_base_url + '/', '')
+                                    
+                                    image_analysis = ImageAnalysis(
+                                        folder=os.path.dirname(relative_img_url),
+                                        filename=os.path.basename(relative_img_url),
+                                        url=relative_img_url,  # Lưu relative URL
+                                        analysis=analysis,
+                                        screen_id=screen_id
+                                    )
+                                    
+                                    result = SiteAnalysis(
+                                        site_url=site_url,
+                                        web_analysis=web_analysis,
+                                        images=[image_analysis],
+                                        screen_id=screen_id
+                                    )
+                                    
+                                    # Lưu ngay sau khi phân tích xong một record
+                                    try:
+                                        logger.info(f"Saving analysis for {img_url}...")
+                                        self.save_analysis(result)
+                                        results.append(result)
+                                        processed_count += 1
+                                        logger.info(f"Successfully saved analysis for {img_url}")
+                                    except Exception as save_error:
+                                        logger.error(f"Error saving analysis for {img_url}: {str(save_error)}")
+                                        logger.error(f"Full save error: {traceback.format_exc()}")
+                                        skipped_count += 1
+                                        continue
+                                else:
+                                    skipped_count += 1
+                                    logger.warning(f"Failed to analyze image {img_url}")
+                            os.unlink(temp_file.name)
+                    except Exception as process_error:
+                        logger.error(f"Error processing image {img_url}: {str(process_error)}")
+                        logger.error(f"Full process error: {traceback.format_exc()}")
+                        skipped_count += 1
+                        continue
+
+            logger.info(f"Processing completed: {processed_count} images analyzed, {skipped_count} skipped")
             return results
 
         except Exception as e:
@@ -357,3 +423,108 @@ class SupabaseImageProcessor:
         except Exception as e:
             logger.error(f"Error saving fusion analysis: {str(e)}")
             logger.error(f"Full error: {traceback.format_exc()}") 
+
+    def process_html_only(self, max_sites: Optional[int] = None) -> List[Dict]:
+        """Process HTML analysis only for sites
+        
+        Args:
+            max_sites: Maximum number of unique sites to analyze. If None, analyze all sites.
+            
+        Returns:
+            List of processed results
+        """
+        try:
+            # Test Supabase connection
+            try:
+                test_query = self.supabase.table('screens').select('id').limit(1).execute()
+                logger.info("Supabase connection successful")
+            except Exception as e:
+                logger.error(f"Supabase connection error: {str(e)}")
+                return []
+
+            # Get analyzed sites
+            analyzed_sites = self.supabase.table('screen_html_analysis')\
+                .select('site_url')\
+                .execute()
+            analyzed_urls = [record['site_url'] for record in analyzed_sites.data]
+            
+            # Get unique sites that haven't been analyzed
+            query = self.supabase.table('screens')\
+                .select('id', 'site_url')\
+                .order('id')
+            
+            response = query.execute()
+            
+            # Create dict with site_url as key and first screen_id as value
+            unique_sites = {}
+            for record in response.data:
+                site_url = record['site_url']
+                if site_url not in unique_sites and site_url not in analyzed_urls:
+                    if max_sites is None or len(unique_sites) < max_sites:
+                        unique_sites[site_url] = record['id']
+            
+            # Convert to list
+            sites_to_process = list(unique_sites.items())
+            
+            if not sites_to_process:
+                logger.info("No new sites to analyze")
+                return []
+            
+            logger.info(f"Found {len(sites_to_process)} new sites to analyze")
+            
+            results = []
+            processed_count = 0
+            skipped_count = 0
+            
+            # Process each site
+            for site_url, screen_id in sites_to_process:
+                try:
+                    logger.info(f"Processing site: {site_url}")
+                    
+                    # Analyze website HTML
+                    web_analysis = self.web_analyzer.analyze_website(site_url)
+                    
+                    if web_analysis:
+                        # Save analysis immediately
+                        try:
+                            logger.info(f"Saving analysis for {site_url}...")
+                            
+                            result = {
+                                'screen_id': screen_id,
+                                'site_url': site_url,
+                                'web_analysis': web_analysis
+                            }
+                            
+                            self.supabase.table('screen_html_analysis').insert({
+                                'screen_id': screen_id,
+                                'site_url': site_url,
+                                'web_analysis': web_analysis,
+                                'embedding': None  # For future use
+                            }).execute()
+                            
+                            results.append(result)
+                            processed_count += 1
+                            logger.info(f"Successfully saved analysis for {site_url}")
+                            
+                        except Exception as save_error:
+                            logger.error(f"Error saving analysis for {site_url}: {str(save_error)}")
+                            logger.error(f"Full save error: {traceback.format_exc()}")
+                            skipped_count += 1
+                            continue
+                    else:
+                        logger.warning(f"No web analysis results for {site_url}")
+                        skipped_count += 1
+                        
+                except Exception as process_error:
+                    logger.error(f"Error processing site {site_url}: {str(process_error)}")
+                    logger.error(f"Full process error: {traceback.format_exc()}")
+                    skipped_count += 1
+                    continue
+                    
+            logger.info(f"Processing completed: {processed_count} sites analyzed, {skipped_count} skipped")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error processing HTML only: {str(e)}")
+            logger.error(f"Full error: {traceback.format_exc()}")
+            return [] 

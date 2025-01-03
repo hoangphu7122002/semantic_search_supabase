@@ -214,4 +214,84 @@ class EmbeddingProcessor:
             
         except Exception as e:
             logger.error(f"Error updating fusion analysis embeddings: {str(e)}")
+            logger.error(f"Full error: {traceback.format_exc()}")
+
+    def process_html_embeddings(self, batch_size: Union[int, str] = 10):
+        """Process embeddings for HTML analysis records
+        
+        Args:
+            batch_size: Number of records to process in each batch or 'all'
+        """
+        try:
+            # Get records without embeddings
+            response = self.supabase.table('screen_html_analysis')\
+                .select('id', 'site_url', 'web_analysis')\
+                .is_('embedding', 'null')\
+                .execute()
+                
+            records = response.data
+            if not records:
+                logger.info("No new HTML records to process embeddings")
+                return
+                
+            logger.info(f"Found {len(records)} HTML records without embeddings")
+            
+            # Process records
+            if batch_size == 'all':
+                # Process all records at once
+                for record in records:
+                    try:
+                        # Create text for embedding
+                        text_for_embedding = f"Site URL: {record['site_url']}\n"
+                        if record['web_analysis']:
+                            text_for_embedding += f"Web Analysis: {json.dumps(record['web_analysis'])}"
+                            
+                        # Generate embedding
+                        embedding = self._create_embedding(text_for_embedding)
+                        
+                        if embedding:
+                            # Update record with embedding
+                            self.supabase.table('screen_html_analysis')\
+                                .update({'embedding': embedding})\
+                                .eq('id', record['id'])\
+                                .execute()
+                            logger.info(f"Updated embedding for HTML record {record['id']}")
+                        else:
+                            logger.warning(f"Could not generate embedding for HTML record {record['id']}")
+                            
+                    except Exception as e:
+                        logger.error(f"Error processing HTML record {record['id']}: {str(e)}")
+                        continue
+            else:
+                # Process in batches
+                for i in range(0, len(records), batch_size):
+                    batch = records[i:i + batch_size]
+                    logger.info(f"Processing batch {i//batch_size + 1}/{(len(records)-1)//batch_size + 1}")
+                    
+                    for record in batch:
+                        try:
+                            # Create text for embedding
+                            text_for_embedding = f"Site URL: {record['site_url']}\n"
+                            if record['web_analysis']:
+                                text_for_embedding += f"Web Analysis: {json.dumps(record['web_analysis'])}"
+                                
+                            # Generate embedding
+                            embedding = self._create_embedding(text_for_embedding)
+                            
+                            if embedding:
+                                # Update record with embedding
+                                self.supabase.table('screen_html_analysis')\
+                                    .update({'embedding': embedding})\
+                                    .eq('id', record['id'])\
+                                    .execute()
+                                logger.info(f"Updated embedding for HTML record {record['id']}")
+                            else:
+                                logger.warning(f"Could not generate embedding for HTML record {record['id']}")
+                                
+                        except Exception as e:
+                            logger.error(f"Error processing HTML record {record['id']}: {str(e)}")
+                            continue
+                        
+        except Exception as e:
+            logger.error(f"Error processing HTML embeddings: {str(e)}")
             logger.error(f"Full error: {traceback.format_exc()}") 
