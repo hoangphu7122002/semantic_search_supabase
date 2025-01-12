@@ -13,6 +13,7 @@ create table screen_analysis (
     web_analysis jsonb,
     image_analysis jsonb,
     embedding vector(1536),
+    section text,
     created_at timestamp with time zone default timezone('utc'::text, now()),
     updated_at timestamp with time zone default timezone('utc'::text, now())
 );

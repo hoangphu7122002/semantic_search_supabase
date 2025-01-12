@@ -35,104 +35,37 @@ class EmbeddingProcessor:
         if site_url := record.get('site_url'):
             combined_text.append(f"Site URL: {site_url}")
         
-        # Add web analysis text
+        # Add web analysis as JSON string
         if web_analysis := record.get('web_analysis'):
-            if isinstance(web_analysis, str):
-                web_analysis = json.loads(web_analysis)
-            
-            # Technical aspects
-            combined_text.extend(web_analysis.get('technical_technologies', []))
-            combined_text.extend(web_analysis.get('technical_meta_tags', []))
-            combined_text.extend(web_analysis.get('technical_heading_structure', []))
-            combined_text.extend(web_analysis.get('technical_semantic_html', []))
-            
-            # Content aspects
-            combined_text.extend(web_analysis.get('content_type', []))
-            combined_text.extend(web_analysis.get('content_main_sections', []))
-            if purpose := web_analysis.get('content_purpose'):
-                combined_text.append(purpose)
-            combined_text.extend(web_analysis.get('content_main_headings', []))
-            combined_text.extend(web_analysis.get('content_key_phrases', []))
-            combined_text.extend(web_analysis.get('content_call_to_actions', []))
-            
-            # Business aspects
-            combined_text.extend(web_analysis.get('business_industry', []))
-            if complexity := web_analysis.get('business_complexity'):
-                combined_text.append(complexity)
-            combined_text.extend(web_analysis.get('business_features', []))
+            if isinstance(web_analysis, dict):
+                web_analysis = json.dumps(web_analysis)
+            combined_text.append(f"Web Analysis: {web_analysis}")
         
-        # Add image analysis text
+        # Add image analysis as JSON string
         if image_analysis := record.get('image_analysis'):
-            if isinstance(image_analysis, str):
-                image_analysis = json.loads(image_analysis)
-            
-            # Content aspects
-            combined_text.extend(image_analysis.get('content_main_text', []))
-            combined_text.extend(image_analysis.get('content_headings', []))
-            combined_text.extend(image_analysis.get('content_buttons_labels', []))
-            if topic := image_analysis.get('content_topic'):
-                combined_text.append(topic)
-            combined_text.extend(image_analysis.get('content_key_messages', []))
-            if context := image_analysis.get('content_context'):
-                combined_text.append(context)
-            
-            # Design aspects
-            combined_text.extend(image_analysis.get('design_style', []))
-            combined_text.extend(image_analysis.get('design_colors_primary', []))
-            if color_scheme := image_analysis.get('design_colors_scheme'):
-                combined_text.append(color_scheme)
-            combined_text.extend(image_analysis.get('design_typography_style', []))
-            if readability := image_analysis.get('design_typography_readability'):
-                combined_text.append(readability)
-            
-            # Layout and UX aspects
-            combined_text.extend(image_analysis.get('layout_components', []))
-            if hierarchy := image_analysis.get('layout_visual_hierarchy'):
-                combined_text.append(hierarchy)
-            if clarity := image_analysis.get('user_experience_clarity'):
-                combined_text.append(clarity)
-            if engagement := image_analysis.get('user_experience_engagement'):
-                combined_text.append(engagement)
-            combined_text.extend(image_analysis.get('user_experience_emotional_tone', []))
+            if isinstance(image_analysis, dict):
+                image_analysis = json.dumps(image_analysis)
+            combined_text.append(f"Image Analysis: {image_analysis}")
         
-        # Filter out None values and join with spaces
-        return ' '.join(str(item) for item in combined_text if item)
+        return ' '.join(combined_text)
 
     def _combine_fusion_analysis_text(self, record: Dict) -> str:
         """Combine relevant fields from fusion analysis into a single text"""
         combined_text = []
         
-        # Add web analysis text (same as screen analysis)
+        # Add web analysis as JSON string
         if web_analysis := record.get('web_analysis'):
-            if isinstance(web_analysis, str):
-                web_analysis = json.loads(web_analysis)
-            
-            if technical := web_analysis.get('technical'):
-                combined_text.extend(technical.get('technologies', []))
-                if seo := technical.get('seo_quality'):
-                    combined_text.extend(seo.get('meta_tags', []))
-            
-            if content := web_analysis.get('content'):
-                combined_text.extend(content.get('type', []))
-                combined_text.append(content.get('purpose', ''))
-                if extracted := content.get('extracted_text'):
-                    combined_text.extend(extracted.get('key_phrases', []))
+            if isinstance(web_analysis, dict):
+                web_analysis = json.dumps(web_analysis)
+            combined_text.append(f"Web Analysis: {web_analysis}")
         
-        # Add fusion analysis text
+        # Add fusion analysis as JSON string
         if fusion_analysis := record.get('fused_analysis'):
-            if isinstance(fusion_analysis, str):
-                fusion_analysis = json.loads(fusion_analysis)
-            
-            if content := fusion_analysis.get('content'):
-                combined_text.append(content.get('primary_topic', ''))
-                combined_text.extend(content.get('key_messages', []))
-                combined_text.append(content.get('text_summary', ''))
-            
-            if patterns := fusion_analysis.get('key_patterns'):
-                combined_text.extend(patterns.get('strengths', []))
-                combined_text.extend(patterns.get('unique_features', []))
+            if isinstance(fusion_analysis, dict):
+                fusion_analysis = json.dumps(fusion_analysis)
+            combined_text.append(f"Fusion Analysis: {fusion_analysis}")
         
-        return ' '.join(filter(None, combined_text))
+        return ' '.join(combined_text)
 
     def check_and_update_embeddings(self, table: str = 'both', batch_size: Union[int, str] = 10):
         """Check and update missing embeddings for specified table(s)

@@ -17,11 +17,13 @@ logger = logging.getLogger(__name__)
 class SupabaseImageProcessor:
     """Handles Supabase storage operations"""
     def __init__(self, supabase_client, web_analyzer: WebAnalyzer, 
-                 image_analyzer: GeminiAnalyzer, enable_fusion: bool = False):
+                 image_analyzer: GeminiAnalyzer, enable_fusion: bool = False,
+                 section_enabled: bool = False):
         self.supabase = supabase_client
         self.web_analyzer = web_analyzer
         self.image_analyzer = image_analyzer
         self.enable_fusion = enable_fusion
+        self.section_enabled = section_enabled
         self.fusion_analyzer = FusionAnalyzer(image_analyzer) if enable_fusion else None
         self.web_analysis_cache = {}
         self.storage_base_url = "http://127.0.0.1:54321/storage/v1/object/public/screens"
@@ -166,7 +168,9 @@ class SupabaseImageProcessor:
                 .eq('site_url', site_url)\
                 .execute()
             
-            return len(response.data) > 0
+            exists = len(response.data) > 0
+            logger.info(f"Checking analysis for screen {screen_id}, site {site_url}: {'exists' if exists else 'not found'}")
+            return exists
         except Exception as e:
             logger.error(f"Error checking analysis status: {str(e)}")
             return False
@@ -254,9 +258,17 @@ class SupabaseImageProcessor:
             else:
                 # Cho regular mode: Lấy các img_url chưa được phân tích
                 analyzed_records = self.supabase.table('screen_analysis')\
-                    .select('webp_url')\
+                    .select('webp_url', 'site_url', 'screen_id')\
                     .execute()
-                analyzed_webp_urls = [record['webp_url'] for record in analyzed_records.data]
+                
+                logger.info(f"Found {len(analyzed_records.data)} existing analysis records")
+                
+                analyzed_webp_urls = set(record['webp_url'] for record in analyzed_records.data)
+                analyzed_screens = {(record['screen_id'], record['site_url']) 
+                                  for record in analyzed_records.data if record['screen_id'] and record['site_url']}
+                
+                logger.info(f"Found {len(analyzed_webp_urls)} analyzed images")
+                logger.info(f"Found {len(analyzed_screens)} analyzed screen-site pairs")
                 
                 # Lấy tất cả screens với site_url và img_url
                 query = self.supabase.table('screens')\
@@ -264,9 +276,11 @@ class SupabaseImageProcessor:
                     .order('id')
                 
                 response = query.execute()
+                logger.info(f"Found {len(response.data)} total screens to check")
                 
                 # Tạo dict với key là site_url và value là list của (screen_id, img_url)
                 unique_sites = {}
+                skipped_count = 0
                 for record in response.data:
                     site_url = record['site_url']
                     img_url = record['img_url']
@@ -275,12 +289,18 @@ class SupabaseImageProcessor:
                     # Tạo full storage URL
                     full_img_url = f"{self.storage_base_url}/{img_url}"
                     
-                    if full_img_url not in analyzed_webp_urls:
-                        if site_url not in unique_sites:
-                            if max_sites is None or len(unique_sites) < max_sites:
-                                unique_sites[site_url] = []
-                        if site_url in unique_sites:
-                            unique_sites[site_url].append((screen_id, full_img_url))
+                    # Check both image and screen-site pair
+                    if full_img_url in analyzed_webp_urls or (screen_id, site_url) in analyzed_screens:
+                        skipped_count += 1
+                        continue
+                    
+                    if site_url not in unique_sites:
+                        if max_sites is None or len(unique_sites) < max_sites:
+                            unique_sites[site_url] = []
+                    if site_url in unique_sites:
+                        unique_sites[site_url].append((screen_id, full_img_url))
+                
+                logger.info(f"Skipped {skipped_count} already analyzed screens")
 
             # Convert to list và áp dụng giới hạn
             sites_to_process = list(unique_sites.items())
@@ -300,35 +320,38 @@ class SupabaseImageProcessor:
             for site_url, screen_records in sites_to_process:
                 logger.info(f"Processing site: {site_url}")
                 
-                # Phân tích web một lần cho mỗi site_url
                 web_analysis = None
                 if site_url in self.web_analysis_cache:
-                    logger.info(f"Using cached web analysis for {site_url}")
                     web_analysis = self.web_analysis_cache[site_url]
                 else:
                     web_analysis = self.web_analyzer.analyze_website(site_url)
                     if web_analysis:
                         self.web_analysis_cache[site_url] = web_analysis
-                
+
                 if not web_analysis:
                     logger.warning(f"No web analysis results for {site_url}")
                     skipped_count += 1
                     continue
 
                 # Process all images for this site
-                for screen_id, img_url in screen_records:  # img_url đã là full URL
+                for screen_id, img_url in screen_records:
                     try:
+                        # Get section if enabled
+                        section = None
+                        if self.section_enabled:
+                            section = self._get_screen_section(screen_id)
+                            logger.info(f"Got section for screen {screen_id}: {section}")
+
                         with tempfile.NamedTemporaryFile(suffix='.webp', delete=False) as temp_file:
                             if self._download_image(img_url, temp_file.name):
                                 analysis = self.image_analyzer.analyze_image(temp_file.name)
                                 if analysis:
-                                    # Lấy relative path từ full URL để lưu vào database
                                     relative_img_url = img_url.replace(self.storage_base_url + '/', '')
                                     
                                     image_analysis = ImageAnalysis(
                                         folder=os.path.dirname(relative_img_url),
                                         filename=os.path.basename(relative_img_url),
-                                        url=relative_img_url,  # Lưu relative URL
+                                        url=relative_img_url,
                                         analysis=analysis,
                                         screen_id=screen_id
                                     )
@@ -337,10 +360,10 @@ class SupabaseImageProcessor:
                                         site_url=site_url,
                                         web_analysis=web_analysis,
                                         images=[image_analysis],
-                                        screen_id=screen_id
+                                        screen_id=screen_id,
+                                        section=section  # Pass section to SiteAnalysis
                                     )
                                     
-                                    # Lưu ngay sau khi phân tích xong một record
                                     try:
                                         logger.info(f"Saving analysis for {img_url}...")
                                         self.save_analysis(result)
@@ -385,13 +408,19 @@ class SupabaseImageProcessor:
                     logger.info(f"Analysis for {img_analysis.url} already exists, skipping...")
                     continue
 
+                # Get section if enabled
+                section = None
+                if self.section_enabled:
+                    section = self._get_screen_section(analysis.screen_id)
+
                 data = {
                     'screen_id': analysis.screen_id,
                     'site_url': analysis.site_url,
                     'webp_url': img_analysis.url,
                     'web_analysis': analysis.web_analysis,
                     'image_analysis': img_analysis.analysis,
-                    'embedding': None
+                    'embedding': None,
+                    'section': section  # Add section to data
                 }
                 
                 self.supabase.table('screen_analysis').insert(data).execute()
@@ -536,3 +565,19 @@ class SupabaseImageProcessor:
             logger.error(f"Error processing HTML only: {str(e)}")
             logger.error(f"Full error: {traceback.format_exc()}")
             return [] 
+
+    def _get_screen_section(self, screen_id: int) -> Optional[str]:
+        """Get section for a screen ID"""
+        try:
+            response = self.supabase.table('screens')\
+                .select('section')\
+                .eq('id', screen_id)\
+                .single()\
+                .execute()
+            print(f"Section response for screen {screen_id}:", response)  # Debug print
+            if response.data:
+                return response.data.get('section')
+            return None
+        except Exception as e:
+            logger.error(f"Error getting screen section: {str(e)}")
+            return None 

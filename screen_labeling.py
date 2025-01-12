@@ -183,33 +183,40 @@ def create_fusion_table(supabase):
     except Exception as e:
         logger.error(f"Error creating fusion table: {str(e)}")
 
-def main(save_to_db: bool = True, max_sites: Optional[int] = 5):
+def main(save_to_db: bool = True, max_sites: Optional[int] = 5, all_sites: bool = False):
     """Main execution function
     
     Args:
         save_to_db: Whether to save analysis results to database. Defaults to True.
-        max_sites: Maximum number of sites to analyze. If None, analyze all sites. Defaults to 5.
+        max_sites: Maximum number of sites to analyze. If None or all_sites=True, analyze all sites. Defaults to 5.
+        all_sites: If True, analyze all sites regardless of max_sites value. Defaults to False.
     """
     try:
         # Initialize clients
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
         genai.configure(api_key=GEMINI_API_KEY)
         
-        # Initialize analyzers with clean_html=False để giữ nguyên HTML tags
+        # Initialize analyzers with clean_html=False
         web_analyzer = WebAnalyzer(supabase, clean_html=False)
         image_analyzer = GeminiAnalyzer()
         
-        # Initialize processor
-        processor = SupabaseImageProcessor(supabase, web_analyzer, image_analyzer)
+        # Initialize processor with section_enabled=True
+        processor = SupabaseImageProcessor(
+            supabase, 
+            web_analyzer, 
+            image_analyzer,
+            section_enabled=True
+        )
         
-        # Process sites
-        results = processor.process_sites(max_sites=max_sites)
+        # Process sites - pass None as max_sites if all_sites is True
+        results = processor.process_sites(max_sites=None if all_sites else max_sites)
         
         # Print results
         logger.info(f"\nAnalysis Results ({len(results)} sites):")
         for result in results:
             logger.info(f"\nSite URL: {result.site_url}")
             logger.info(f"Screen ID: {result.screen_id}")
+            logger.info(f"Section: {result.section}")
             logger.info("Web Analysis:")
             logger.info(json.dumps(result.web_analysis, indent=2, ensure_ascii=False))
             logger.info(f"Number of images analyzed: {len(result.images)}")
@@ -306,16 +313,27 @@ def parse_args():
                        help='Analysis mode: main (regular), main1 (with fusion), or main2 (HTML only)')
     parser.add_argument('--save-to-db', action='store_true', default=True,
                        help='Save results to database (default: True)')
-    parser.add_argument('--max-sites', type=int, default=5,
-                       help='Maximum number of sites to analyze (default: 5)')
+    parser.add_argument('--max-sites', type=str, default='5',
+                       help='Maximum number of sites to analyze (default: 5, use "all" for all sites)')
     return parser.parse_args()
+
+def get_max_sites(max_sites_arg: str) -> Optional[int]:
+    """Convert max_sites argument to integer or None for 'all'"""
+    if max_sites_arg.lower() == 'all':
+        return None
+    try:
+        return int(max_sites_arg)
+    except ValueError:
+        logger.error(f"Invalid max-sites value: {max_sites_arg}. Using default: 5")
+        return 5
 
 if __name__ == "__main__":
     args = parse_args()
+    max_sites = get_max_sites(args.max_sites)
     
     if args.mode == 'main':
-        main(save_to_db=args.save_to_db, max_sites=args.max_sites)
+        main(save_to_db=args.save_to_db, max_sites=max_sites)
     elif args.mode == 'main1':
-        main1(save_to_db=args.save_to_db, max_sites=args.max_sites)
+        main1(save_to_db=args.save_to_db, max_sites=max_sites)
     else:  # main2
-        main2(save_to_db=args.save_to_db, max_sites=args.max_sites) 
+        main2(save_to_db=args.save_to_db, max_sites=max_sites) 

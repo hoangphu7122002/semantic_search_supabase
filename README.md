@@ -32,25 +32,31 @@ This script allows you to label screens with their corresponding categories and 
 Usage:
 ```bash
 # For regular labeling:
-python screen_labeling.py main --save-to-db --max-sites <number>
+python screen_labeling.py main [--save-to-db] [--max-sites <number>|all]
 
 # For labeling with fusion analysis:
-python screen_labeling.py main1 --save-to-db --max-sites <number>
+python screen_labeling.py main1 [--save-to-db] [--max-sites <number>|all]
 
 # For HTML-only analysis:
-python screen_labeling.py main2 --save-to-db --max-sites <number>
+python screen_labeling.py main2 [--save-to-db] [--max-sites <number>|all]
 ```
 
 Example:
 ```bash
-# Regular analysis
-python screen_labeling.py main --save-to-db --max-sites 5
+# Regular analysis with default 5 sites
+python screen_labeling.py main
+
+# Regular analysis with specific number of sites
+python screen_labeling.py main --max-sites 10
+
+# Regular analysis for all sites
+python screen_labeling.py main --max-sites all
 
 # Analysis with fusion components
-python screen_labeling.py main1 --save-to-db --max-sites 5
+python screen_labeling.py main1 --max-sites all
 
-# HTML-only analysis (processes more sites)
-python screen_labeling.py main2 --save-to-db --max-sites 100
+# HTML-only analysis
+python screen_labeling.py main2 --max-sites all
 ```
 
 Parameters:
@@ -60,8 +66,8 @@ Parameters:
   - `main2`: HTML-only analysis
 - `--save-to-db`: Whether to save results to database (default: True)
 - `--max-sites`: Maximum number of sites to analyze
-  - Use 0 or negative number for no limit
-  - Default: 5 for main/main1, 100 for main2
+  - Use "all" to analyze all available sites
+  - Default: 5 for all modes
 
 ## Running update_embeddings.py
 
@@ -119,7 +125,6 @@ Parameters:
 Make sure to configure the following variables in your `.env` file:
 - `PUBLIC_SUPABASE_URL`: Your Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
-- `OPENAI_API_KEY`: Your OpenAI API key
 - `GEMINI_API_KEY`: Your Google Gemini API key
 
 ## Note
@@ -127,6 +132,8 @@ Make sure to configure the following variables in your `.env` file:
 - Ensure all required environment variables are set in `.env`
 - The virtual environment directory (`venv/`) is gitignored
 - Different analysis modes store results in separate tables:
-  - Regular: screen_analysis
+  - Regular: screen_analysis (includes section data)
   - Fusion: screen_analysis_fusion
   - HTML: screen_html_analysis
+- When using `--max-sites all`, the script will process all available unanalyzed sites
+- The script automatically skips already analyzed screens to avoid duplicates
