@@ -7,9 +7,11 @@ from src.prompts.analysis_prompts import IMAGE_ANALYSIS_PROMPT
 
 logger = logging.getLogger(__name__)
 
+
 class GeminiAnalyzer:
     """Handles image analysis using Gemini API"""
     def __init__(self):
+        # genai.configure(api_key='AIzaSyA-At5EqrjowGgCrh3Il37QiYSm15WkpHc')
         self.model = genai.GenerativeModel(
             model_name="gemini-2.0-flash-exp",
             generation_config={
@@ -23,8 +25,21 @@ class GeminiAnalyzer:
     def analyze_image(self, image_path: str) -> Optional[Dict]:
         """Analyzes an image using Gemini API"""
         try:
-            image_file = genai.upload_file(image_path, mime_type="image/webp")
-            response = self.model.generate_content([image_file, IMAGE_ANALYSIS_PROMPT])
+            with open(image_path, 'rb') as f:
+                image_data = f.read()
+            
+            response = self.model.generate_content(
+                contents=[{
+                    "parts": [
+                        {"text": IMAGE_ANALYSIS_PROMPT},
+                        {"inline_data": {
+                            "mime_type": "image/webp",
+                            "data": image_data
+                        }}
+                    ]
+                }]
+            )
+            
             json_str = response.text.strip('`json\n').strip('`\n')
             return json.loads(json_str)
         except Exception as e:

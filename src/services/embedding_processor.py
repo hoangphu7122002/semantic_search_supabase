@@ -4,15 +4,57 @@ import json
 from typing import Dict, List, Optional, Union
 from openai import OpenAI
 import traceback
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
 class EmbeddingProcessor:
     """Handles creation and updating of embeddings for analyses"""
-    
+
     def __init__(self, supabase_client):
         self.supabase = supabase_client
         self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.max_length = 500  # Số token tối đa cho mỗi đoạn
+        self.overlap = 50  # Số token overlap giữa các đoạn
+
+    # def _split_text(self, text: str) -> List[str]:
+    #     """Chia văn bản thành các đoạn có overlap"""
+    #     words = text.split()  # Tách thành danh sách từ
+    #     segments = []
+    #     start = 0
+    #     while start < len(words):
+    #         segment = words[start:start + self.max_length]
+    #         segments.append(" ".join(segment))
+    #         start += self.max_length - self.overlap  # Di chuyển cửa sổ với overlap
+    #     return segments
+
+    # def _create_embedding(self, text: str) -> Optional[List[float]]:
+    #     """Chia văn bản, tạo embedding và áp dụng mean pooling"""
+    #     try:
+    #         segments = self._split_text(text)
+    #         embeddings = []
+    #         print(len(segments),len(segments[0]))
+    #         for segment in segments:
+    #             # print(segment)
+    #             response = self.client.embeddings.create(
+    #                 model="text-embedding-3-small",
+    #                 input=segment,
+    #                 encoding_format="float"
+    #             )
+    #             embeddings.append(response.data[0].embedding)
+
+    #         # Mean pooling để lấy embedding cuối cùng
+    #         if embeddings:
+    #             final_embedding = np.mean(embeddings, axis=0).tolist()
+    #             return final_embedding
+    #         else:
+    #             return None
+
+    #     except Exception as e:
+    #         logger.error(f"Error creating embedding: {str(e)}")
+    #         return None
+
+
 
     def _create_embedding(self, text: str) -> Optional[List[float]]:
         """Create embedding from text using OpenAI API"""
@@ -26,6 +68,7 @@ class EmbeddingProcessor:
         except Exception as e:
             logger.error(f"Error creating embedding: {str(e)}")
             return None
+
 
     def _combine_screen_analysis_text(self, record: Dict) -> str:
         """Combine relevant fields from screen_analysis into a single text"""

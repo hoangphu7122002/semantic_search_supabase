@@ -11,6 +11,7 @@ import traceback
 
 from src.services.web_analyzer import WebAnalyzer
 from src.services.gemini_analyzer import GeminiAnalyzer
+from src.services.openai_analyzer import OpenAIAnalyzer
 from src.services.supabase_processor import SupabaseImageProcessor
 from src.services.fusion_analyzer import FusionAnalyzer
 
@@ -195,10 +196,14 @@ def main(save_to_db: bool = True, max_sites: Optional[int] = 5, all_sites: bool 
         # Initialize clients
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
         genai.configure(api_key=GEMINI_API_KEY)
+        # print(SUPABASE_URL)
+        # print(SUPABASE_KEY)
+        # print(GEMINI_API_KEY)
         
         # Initialize analyzers with clean_html=False
         web_analyzer = WebAnalyzer(supabase, clean_html=False)
         image_analyzer = GeminiAnalyzer()
+        # image_analyzer = OpenAIAnalyzer()
         
         # Initialize processor with section_enabled=True
         processor = SupabaseImageProcessor(

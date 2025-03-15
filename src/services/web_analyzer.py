@@ -6,8 +6,14 @@ from bs4 import BeautifulSoup
 import google.generativeai as genai
 from src.models.analysis_result import WebAnalysisResult
 from src.prompts.analysis_prompts import WEB_ANALYSIS_PROMPT
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+
+# Tắt cảnh báo về việc bỏ qua SSL verification
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
+
+# genai.configure(api_key='AIzaSyD1rfOLeVnVZXGsd2SV3YEZYB2Osdz0Dcs')
 
 class WebAnalyzer:
     def __init__(self, supabase_client, clean_html: bool = False):
@@ -31,14 +37,19 @@ class WebAnalyzer:
                 return None
 
             # Process HTML based on clean_html setting
-            content_to_analyze = self._clean_html(html_content) if self.clean_html else html_content
+            # content_to_analyze = self._clean_html(html_content) if self.clean_html else html_content
+            content_to_analyze = html_content
             response = self.model.generate_content([
                 WEB_ANALYSIS_PROMPT,
                 f"HTML Content to analyze:\n{content_to_analyze}"
             ])
 
             json_str = response.text.strip('`json\n').strip('`\n')
-            return json.loads(json_str)
+            
+            data = json.loads(json_str)
+            # data['html'] = html_content
+            
+            return data
 
         except Exception as e:
             logger.error(f"Error analyzing website {url}: {str(e)}")
@@ -59,10 +70,14 @@ class WebAnalyzer:
 
     def _fetch_html_content(self, url: str) -> Optional[str]:
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(
+                url,
+                verify=False,  # Tắt SSL verification
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                },
+                timeout=10
+            )
             response.raise_for_status()
             return response.text
         except Exception as e:
